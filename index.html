@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Twelve years of Indian interest rates as an interactive 3D surface. By Udit Chauhan.">
+<style>body{margin:0}</style>
+</head>
+<body>
+<title>India Rate Surface</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one sticky 3D stage that the scroll story flies through, then a hands-on explorer, today's curve, a CSV drop-in and sources. Deliberately single dark look, like a trading screen at night. */
+:root{
+  --bg:#0a0e13;
+  --panel:#10161e;
+  --line:#1e2833;
+  --fg:#e6ebf0;
+  --muted:#8995a3;
+  --dim:#4d5966;
+  --repo:#f3b562;
+  --m3:#5ed0c3;
+  --y10:#b9a2ff;
+  --hot:#ef8a62;
+  --display:"Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.6;overflow-x:hidden}
+a{color:inherit;text-underline-offset:3px;text-decoration-color:var(--dim)}
+a:hover{text-decoration-color:var(--fg)}
+h1,h2,h3{font-family:var(--display);font-weight:400;letter-spacing:-.01em;line-height:1.02;margin:0;text-wrap:balance}
+p{margin:0}
+.wrap{padding-inline:clamp(16px,4vw,56px)}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.k-repo{color:var(--repo)}.k-m3{color:var(--m3)}.k-y10{color:var(--y10)}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
+
+/* ---------- top bar ---------- */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;display:flex;justify-content:space-between;align-items:center;gap:16px;padding-block:12px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.bar b{font-family:var(--display);font-weight:400;font-size:22px;letter-spacing:0}
+.bar nav{display:flex;gap:22px;font-size:13px;color:var(--muted)}
+.bar nav a{text-decoration:none}.bar nav a:hover{color:var(--fg)}
+@media (max-width:620px){.bar nav{display:none}}
+
+/* ---------- story: sticky stage + scrolling steps ---------- */
+.story{position:relative}
+.stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.labels span{position:absolute;left:0;top:0;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;transform:translate(-50%,-50%);will-change:transform}
+.labels span.rail{font-size:12px;font-weight:500}
+.labels span.left{transform:translate(-100%,-50%)}
+.hud{position:absolute;right:clamp(16px,4vw,56px);top:72px;display:grid;grid-template-columns:auto auto;gap:4px 18px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--bg) 72%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-size:13px;min-width:210px}
+.hud .when{grid-column:1/-1;font-family:var(--display);font-size:26px;line-height:1.1;margin-bottom:6px}
+.hud dt{color:var(--muted)}
+.hud dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.hud .sep{grid-column:1/-1;height:1px;background:var(--line);margin:4px 0}
+.hud .note{grid-column:1/-1;font-size:11px;color:var(--dim);font-family:var(--mono)}
+.legend{position:absolute;left:clamp(16px,4vw,56px);bottom:22px;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:7px}
+.steps{position:relative;margin-top:-100vh;margin-top:-100svh;pointer-events:none;padding-bottom:35vh}
+.step{min-height:100vh;min-height:100svh;display:flex;align-items:center;padding-block:15vh}
+.step:first-child{align-items:flex-start;padding-top:18vh}
+.card{pointer-events:auto;max-width:420px;padding:22px 24px;border:1px solid var(--line);border-radius:14px;background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:grid;gap:10px}
+.card h2{font-size:clamp(28px,3.4vw,38px)}
+.card p{color:#c3ccd6;font-size:15.5px}
+.card .eyebrow{color:var(--hot)}
+.intro{max-width:640px;display:grid;gap:16px;position:relative;isolation:isolate}
+.intro::before{content:"";position:absolute;inset:-60px 0 -60px -120px;z-index:-1;background:radial-gradient(closest-side,color-mix(in srgb,var(--bg) 94%,transparent) 55%,transparent);pointer-events:none}
+.intro h1{font-size:clamp(58px,10vw,128px);line-height:.9}
+.intro h1 em{font-style:italic;color:var(--hot)}
+.intro p{font-size:clamp(16px,1.6vw,19px);color:#c3ccd6;max-width:46ch}
+.intro .cue{font-family:var(--mono);font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+@media (max-width:760px){
+  .hud{top:62px;left:16px;right:16px;min-width:0;grid-template-columns:repeat(4,auto);padding:10px 12px;font-size:12px;gap:2px 12px}
+  .hud .when{font-size:20px;margin:0}
+  .hud dt{font-size:10.5px}
+  .hud dd{text-align:left}
+  .hud .sep,.hud .note{display:none}
+  .step{align-items:flex-end;padding-block:0 12vh}
+  .step:first-child{align-items:flex-end;padding-top:0}
+  .card{max-width:none}
+  .legend{display:none}
+}
+
+/* ---------- sections ---------- */
+section.block{padding-block:clamp(72px,12vh,140px);border-top:1px solid var(--line);display:grid;gap:28px}
+section.block>header{display:grid;gap:12px;max-width:68ch}
+section.block h2{font-size:clamp(40px,5.4vw,68px)}
+section.block header p{color:#c3ccd6}
+
+/* explorer */
+.explore{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+@media (max-width:900px){.explore{grid-template-columns:minmax(0,1fr)}}
+.viewport{position:relative;min-width:0;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:radial-gradient(70% 70% at 50% 45%,#121a24,var(--bg));aspect-ratio:16/10;max-width:100%;cursor:grab;touch-action:pan-y}
+.viewport:active{cursor:grabbing}
+.viewport canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.viewport .tip{position:absolute;pointer-events:none;font-family:var(--mono);font-size:12px;padding:6px 9px;border-radius:8px;background:var(--panel);border:1px solid var(--line);transform:translate(12px,-120%);white-space:nowrap}
+.vbtns{position:absolute;right:12px;top:12px;display:flex;gap:6px}
+.vbtns button{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--panel);cursor:pointer;font-family:var(--mono);font-size:15px}
+.vbtns button:hover{border-color:var(--muted)}
+.vhint{position:absolute;left:14px;bottom:12px;font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase;pointer-events:none}
+.side{min-width:0;display:grid;gap:16px;align-content:start;border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--panel)}
+.side .when{font-family:var(--display);font-size:34px;line-height:1}
+.readout{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:14px}
+.readout dt{color:var(--muted)}
+.readout dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.readout .tot{border-top:1px solid var(--line);padding-top:8px}
+.side svg{width:100%;height:auto;display:block}
+.side .cap{font-size:12px;color:var(--muted)}
+.scrub{display:flex;gap:12px;align-items:center}
+.scrub button{flex:none;height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);cursor:pointer;font-size:13px;font-weight:500}
+.scrub button:hover{border-color:var(--muted)}
+.scrub input{flex:1;min-width:0;accent-color:var(--hot)}
+
+/* today */
+.today{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:900px){.today{grid-template-columns:minmax(0,1fr)}}
+.chartbox{border:1px solid var(--line);border-radius:16px;padding:16px;background:var(--panel);min-width:0}
+.chartbox svg{width:100%;height:auto;display:block}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line)}
+th{font-weight:500;color:var(--muted);font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+td.r,th.r{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* csv */
+.drop{border:1.5px dashed var(--dim);border-radius:16px;padding:28px;display:grid;gap:14px;justify-items:start;background:var(--panel);transition:border-color .2s,background .2s}
+.drop.over{border-color:var(--hot);background:#151d27}
+.drop .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{height:40px;padding:0 18px;border-radius:999px;border:1px solid var(--line);background:var(--fg);color:var(--bg);font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center}
+.btn.ghost{background:transparent;color:var(--fg)}
+.btn.ghost:hover{border-color:var(--muted)}
+.drop code,.fmt{font-family:var(--mono);font-size:13px}
+.fmt{display:block;white-space:pre;overflow-x:auto;padding:12px 14px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:#c3ccd6;max-width:100%}
+.status{font-size:14px;color:var(--muted);min-height:1.6em}
+.status.ok{color:var(--m3)}.status.err{color:var(--hot)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* sources */
+.src{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:22px 32px}
+.src div{min-width:0;display:grid;gap:6px;align-content:start}
+.src h3{font-family:var(--body);font-weight:600;font-size:15px}
+.src p{color:var(--muted);font-size:14.5px}
+footer{padding-block:36px 56px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;font-size:14px;color:var(--muted)}
+footer nav{display:flex;gap:18px;flex-wrap:wrap}
+.nogl{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted)}
+
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<div class="bar wrap">
+  <b>India Rate Surface</b>
+  <nav><a href="#explore">Explore</a><a href="#today">Today's curve</a><a href="#sources">Sources</a></nav>
+</div>
+
+<div class="story" id="story">
+  <div class="stage" id="stage">
+    <canvas id="c1" aria-label="3D surface of Indian interest rates from 2014 to 2026"></canvas>
+    <div class="labels" id="lab1"></div>
+    <dl class="hud" id="hud" aria-live="polite">
+      <div class="when" id="hWhen">Jan 2014</div>
+      <dt class="k-repo">Repo rate</dt><dd id="hRepo">8.00%</dd>
+      <dt class="k-m3">3-month</dt><dd id="hM3">8.75%</dd>
+      <dt class="k-y10">10-year</dt><dd id="hY10">8.76%</dd>
+      <div class="sep"></div>
+      <dt>10Y − 3M</dt><dd id="hSpr">+0.01</dd>
+      <div class="note" id="hNote">Monthly average</div>
+    </dl>
+    <div class="legend"><span><i style="background:var(--repo)"></i>RBI repo rate</span><span><i style="background:var(--m3)"></i>3-month rate</span><span><i style="background:var(--y10)"></i>10-year G-sec</span></div>
+  </div>
+
+  <div class="steps wrap" id="steps">
+    <div class="step" data-m="2014-01" data-v="intro">
+      <div class="intro">
+        <span class="eyebrow">India · Jan 2014 to Oct 2026 · 154 months</span>
+        <h1>The shape <em>of money</em></h1>
+        <p>Every month of Indian interest rates since 2014, drawn as one surface. The front edge is the RBI's policy rate. The back edge is the 10-year government bond. Scroll to watch the RBI move it.</p>
+        <span class="cue">Scroll ↓</span>
+      </div>
+    </div>
+    <div class="step" data-m="2014-02" data-v="front">
+      <article class="card">
+        <span class="eyebrow">2014</span>
+        <h2>Short money cost more than long money</h2>
+        <p>In February 2014 the 3-month rate stood at <span class="num">9.09%</span>, above the 10-year bond at <span class="num">8.81%</span>. Money markets were still tight after the RBI squeezed liquidity in 2013 to steady the rupee, so the front of the surface sits higher than the back.</p>
+      </article>
+    </div>
+    <div class="step" data-m="2019-10" data-v="glide">
+      <article class="card">
+        <span class="eyebrow">2015 – 2019</span>
+        <h2>The long glide down</h2>
+        <p>The repo rate fell from <span class="num">8.00%</span> to <span class="num">5.15%</span> between January 2015 and October 2019, with two hikes in 2018 along the way. The front edge steps down while the 10-year drifts between <span class="num">6.5%</span> and <span class="num">8.0%</span>.</p>
+      </article>
+    </div>
+    <div class="step" data-m="2020-11" data-v="floor">
+      <article class="card">
+        <span class="eyebrow">2020 – 2021</span>
+        <h2>The floor</h2>
+        <p>Pandemic cuts took the repo rate to <span class="num">4.00%</span> in May 2020. With the system flush with cash, the 3-month rate sank to <span class="num">3.06%</span> by November, below the policy rate itself. The 10-year held near 6%, which opened the widest gap on the surface: <span class="num">3.18</span> points between 3-month and 10-year in April 2022.</p>
+      </article>
+    </div>
+    <div class="step" data-m="2023-03" data-v="hikes">
+      <article class="card">
+        <span class="eyebrow">2022 – 2024</span>
+        <h2>250 basis points in nine months</h2>
+        <p>From May 2022 to February 2023 the RBI raised the repo rate from <span class="num">4.00%</span> to <span class="num">6.50%</span>. The 3-month rate climbed from <span class="num">3.93%</span> to <span class="num">6.88%</span>, but the 10-year moved far less, from <span class="num">7.11%</span> to <span class="num">7.36%</span>. The front rose to meet the back, and by June 2024 the gap was just <span class="num">0.19</span> points.</p>
+      </article>
+    </div>
+    <div class="step" data-m="2026-04" data-v="steep">
+      <article class="card">
+        <span class="eyebrow">2025 – 2026</span>
+        <h2>Cuts reached the front, not the back</h2>
+        <p>The RBI cut 125 basis points between February and December 2025, to <span class="num">5.25%</span>. The 3-month rate followed it down to <span class="num">5.29%</span>. The 10-year bottomed at <span class="num">6.27%</span> in May 2025, then rose to <span class="num">7.05%</span> by April 2026. The surface steepened again.</p>
+      </article>
+    </div>
+    <div class="step" data-m="2026-10" data-v="today">
+      <article class="card">
+        <span class="eyebrow">October 2026</span>
+        <h2>The first hike since 2023</h2>
+        <p>On 7 October 2026 the RBI raised the repo rate by 25 basis points to <span class="num">5.50%</span>. Two days later the full curve ran from <span class="num">5.45%</span> at 3 months to <span class="num">7.71%</span> at 30 years. This last slice shows all nine maturities, which is the shape the whole surface would take with complete data.</p>
+      </article>
+    </div>
+  </div>
+</div>
+
+<section class="block wrap" id="explore">
+  <header>
+    <span class="eyebrow">Explorer</span>
+    <h2>Turn it, scrub it, read it</h2>
+    <p>Drag to rotate the surface and hover to read any month. Move the slider, or press Play to run through twelve years of policy.</p>
+  </header>
+  <div class="explore">
+    <div style="display:grid;gap:14px;min-width:0">
+      <div class="viewport" id="vp">
+        <canvas id="c2" aria-label="Rotatable 3D rate surface"></canvas>
+        <div class="labels" id="lab2"></div>
+        <div class="tip" id="tip" hidden></div>
+        <div class="vbtns"><button type="button" id="zin" aria-label="Zoom in">+</button><button type="button" id="zout" aria-label="Zoom out">−</button><button type="button" id="zreset" aria-label="Reset view">⟲</button></div>
+        <span class="vhint">Drag to rotate</span>
+      </div>
+      <div class="scrub">
+        <button type="button" id="play">Play</button>
+        <label class="sr" for="slider">Month</label>
+        <input type="range" id="slider" min="0" max="153" value="153" step="1">
+      </div>
+    </div>
+    <aside class="side" aria-live="polite">
+      <div class="when" id="sWhen">Oct 2026</div>
+      <dl class="readout">
+        <dt class="k-repo">RBI repo rate</dt><dd id="sRepo">–</dd>
+        <dt class="k-m3">3-month rate</dt><dd id="sM3">–</dd>
+        <dt class="k-y10">10-year G-sec</dt><dd id="sY10">–</dd>
+        <dt class="tot">Term spread, 10Y − 3M</dt><dd class="tot" id="sSpr">–</dd>
+      </dl>
+      <div>
+        <svg id="spark" viewBox="0 0 300 120" role="img" aria-label="Term spread over time"></svg>
+        <p class="cap">Term spread, 10-year minus 3-month, across the whole period. Above zero, long money costs more than short money. Click to jump.</p>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<section class="block wrap" id="today">
+  <header>
+    <span class="eyebrow">Yield curve · 9 October 2026</span>
+    <h2>The curve today</h2>
+    <p>Nine maturities from 3 months to 30 years, two days after the RBI's October hike. The dashed line is the new repo rate of 5.50%. The curve slopes up by more than two percentage points from the 3-month to the 30-year.</p>
+  </header>
+  <div class="today">
+    <div class="chartbox"><svg id="curve" viewBox="0 0 640 340" role="img" aria-label="India government yield curve on 9 October 2026"></svg></div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Maturity</th><th class="r">Yield</th><th class="r">Over repo</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="block wrap" id="sources">
+  <header>
+    <span class="eyebrow">Data and method</span>
+    <h2>Where the numbers come from</h2>
+  </header>
+  <div class="src">
+    <div><h3>10-year government bond</h3><p>OECD Main Economic Indicators via FRED, series <a href="https://fred.stlouisfed.org/series/INDIRLTLT01STM" target="_blank" rel="noopener">INDIRLTLT01STM</a>. Monthly averages, January 2014 to July 2026.</p></div>
+    <div><h3>3-month rate</h3><p>OECD 3-month interbank rate for India via FRED, series <a href="https://fred.stlouisfed.org/series/INDIR3TIB01STM" target="_blank" rel="noopener">INDIR3TIB01STM</a>. Monthly averages, January 2014 to July 2026.</p></div>
+    <div><h3>RBI repo rate</h3><p>Policy decisions from <a href="https://stableinvestor.com/2021/10/rbi-repo-rate-history-india.html" target="_blank" rel="noopener">StableInvestor's repo rate history</a>, with the October 2026 hike confirmed by <a href="https://tradingeconomics.com/india/interest-rate" target="_blank" rel="noopener">Trading Economics</a>. Each month shows the rate in force at month-end.</p></div>
+    <div><h3>Full curve, 9 October 2026</h3><p>Closing yields for nine maturities from <a href="https://tradingeconomics.com/india/government-bond-yield" target="_blank" rel="noopener">Trading Economics</a>.</p></div>
+    <div><h3>Reading the surface</h3><p>Only the bright lines are data. The sheet between them joins neighbouring maturities with straight lines so the shape is easy to see. Maturity is on a log scale, so overnight, 3 months and 10 years sit at readable distances.</p></div>
+    <div><h3>Gaps</h3><p>The monthly series end in July 2026, so August and September 2026 are blank. The October slice is a single day, 9 October, not a monthly average.</p></div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <span>Built by Udit Chauhan · MSc Economics, Shiv Nadar University</span>
+  <nav><a href="https://www.linkedin.com/in/udit-chauhan-94019721a/" target="_blank" rel="noopener">LinkedIn</a><a href="https://github.com/uditchauhan29" target="_blank" rel="noopener">GitHub</a><a href="https://uditchauhan29.github.io/-/" target="_blank" rel="noopener">Portfolio</a><a href="https://medium.com/@udit.chauhan.econ" target="_blank" rel="noopener">Blog</a></nav>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const [hWhen,hRepo,hM3,hY10,hSpr,hNote,c1,c2,lab1,lab2,stage,vp,tip,zin,zout,zreset,slider,play,sWhen,sRepo,sM3,sY10,sSpr,spark,curve,tbody,drop,file,resetData,status]=["hWhen","hRepo","hM3","hY10","hSpr","hNote","c1","c2","lab1","lab2","stage","vp","tip","zin","zout","zreset","slider","play","sWhen","sRepo","sM3","sY10","sSpr","spark","curve","tbody","drop","file","resetData","csvStatus"].map($);
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const ease=t=>t*t*(3-2*t);
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COL={repo:css('--repo'),m3:css('--m3'),y10:css('--y10'),muted:css('--muted'),dim:css('--dim'),line:css('--line'),fg:css('--fg'),hot:css('--hot')};
+
+/* ================= DATA ================= */
+const T3M=[8.75,9.09,9.13,8.89,8.77,8.55,8.57,8.64,8.58,8.47,8.29,8.29,8.3,8.32,8.28,7.87,7.93,7.68,7.51,7.39,7.43,7.08,7.13,7.2,5.8,5.51,7.26,6.91,6.71,6.8,6.61,6.56,6.54,6.37,6.13,6.12,6.24,6.16,5.93,6.04,6.41,6.28,6.2,6.14,6.1,6.09,6.11,6.17,6.34,6.38,6.23,6.13,6.3,6.49,6.55,6.76,7.02,6.99,6.87,6.67,6.64,6.48,6.36,6.3,6.37,6.0,5.83,5.49,5.34,5.18,5.03,4.98,5.07,5.09,4.98,4.13,3.42,3.31,3.22,3.23,3.27,3.25,3.06,3.1,3.21,3.27,3.27,3.33,3.37,3.44,3.43,3.35,3.31,3.47,3.56,3.58,3.63,3.79,3.78,3.92,4.7,5.02,5.31,5.58,5.81,6.29,6.46,6.39,6.41,6.69,6.88,6.81,6.86,6.76,6.72,6.8,6.84,6.89,6.93,6.95,6.96,7.03,6.92,6.89,6.94,6.83,6.75,6.64,6.64,6.46,6.47,6.47,6.59,6.45,6.5,6.04,5.79,5.43,5.38,5.47,5.5,5.45,5.41,5.29,5.41,5.32,5.32,5.24,5.39,5.34,5.32];
+const T10Y=[8.77,8.81,8.84,8.99,8.75,8.63,8.66,8.56,8.49,8.4,8.19,7.96,7.79,7.73,7.82,7.84,7.85,7.8,7.82,7.79,7.73,7.6,7.75,7.79,7.67,7.72,7.58,7.44,7.28,7.5,7.35,7.14,6.86,6.79,6.61,6.53,6.79,6.98,7.12,7.17,7.11,6.58,6.55,6.6,6.72,6.94,7.17,7.35,7.22,7.57,7.61,7.55,7.85,7.94,7.8,7.83,8.02,7.92,7.79,7.37,7.35,7.43,7.41,7.42,7.33,6.97,6.6,6.62,6.81,6.54,6.63,6.85,6.82,6.66,6.7,6.76,5.92,5.86,5.82,6.01,6.03,5.95,5.89,5.89,5.94,6.19,6.35,6.28,6.22,6.27,6.21,6.28,6.19,6.36,6.35,6.44,6.64,6.75,6.82,7.11,7.39,7.53,7.4,7.28,7.28,7.46,7.36,7.29,7.39,7.33,7.36,7.18,7.01,7.05,7.11,7.18,7.17,7.35,7.27,7.22,7.2,7.09,7.07,7.15,7.05,7.02,7.01,6.91,6.83,6.79,6.81,6.78,6.76,6.73,6.68,6.46,6.27,6.31,6.35,6.52,6.58,6.48,6.54,6.63,6.73,6.77,6.84,7.05,7.02,6.89,6.78];
+
+const CHANGES=[["2014-01",8.0],["2015-01",7.75],["2015-03",7.5],["2015-06",7.25],["2015-09",6.75],["2016-04",6.5],["2016-10",6.25],["2017-08",6.0],["2018-06",6.25],["2018-08",6.5],["2019-02",6.25],["2019-04",6.0],["2019-06",5.75],["2019-08",5.4],["2019-10",5.15],["2020-03",4.4],["2020-05",4.0],["2022-05",4.4],["2022-06",4.9],["2022-08",5.4],["2022-09",5.9],["2022-12",6.25],["2023-02",6.5],["2025-02",6.25],["2025-04",6.0],["2025-06",5.5],["2025-12",5.25],["2026-10",5.5]];
+const TODAY={label:'9 Oct 2026',repo:5.5,pts:[['3M',.25,5.45],['6M',.5,6.08],['1Y',1,6.21],['2Y',2,6.63],['3Y',3,6.89],['5Y',5,7.05],['7Y',7,7.22],['10Y',10,7.29],['30Y',30,7.71]]};
+const ym=k=>{const y=2014+Math.floor(k/12),m=k%12;return y+'-'+String(m+1).padStart(2,'0')};
+const ymLabel=s=>{const [y,m]=s.split('-');return MON[+m-1]+' '+y};
+
+function publicDataset(){
+  const N=154, months=[...Array(N)].map((_,k)=>ym(k));
+  const repo=months.map(m=>{let r=8;for(const [d,v] of CHANGES) if(d<=m) r=v;return r});
+  const pad=a=>months.map((_,k)=>k<a.length?a[k]:NaN);
+  const m3=pad(T3M), y10=pad(T10Y);
+  m3[153]=5.45; y10[153]=7.29;
+  return {mode:'public',months,snapshotIndex:153,rails:[
+    {key:'repo',label:'Repo',mat:1/365,color:COL.repo,vals:repo},
+    {key:'m3',label:'3M',mat:.25,color:COL.m3,vals:m3},
+    {key:'y10',label:'10Y',mat:10,color:COL.y10,vals:y10}
+  ]};
+}
+let DS=publicDataset();
+
+/* ================= GEOMETRY HELPERS ================= */
+const W=13, ZF=3.4, ZB=-3.4, LMIN=Math.log10(1/365), LMAX=Math.log10(30);
+const X=(i,N)=>(i/(N-1)-.5)*W;
+const Z=mat=>lerp(ZF,ZB,(Math.log10(mat)-LMIN)/(LMAX-LMIN));
+const Y=v=>(v-2)*.62;
+const VMIN=3, VMAX=9.2;
+const RAMP=[[0,'#173a5c'],[.38,'#2f8f97'],[.62,'#c9b27a'],[1,'#ef7a55']];
+function rampColor(v){const t=clamp((v-VMIN)/(VMAX-VMIN));for(let k=1;k<RAMP.length;k++){if(t<=RAMP[k][0]){const a=RAMP[k-1],b=RAMP[k],u=(t-a[0])/(b[0]-a[0]);return new THREE.Color(a[1]).lerp(new THREE.Color(b[1]),u)}}return new THREE.Color(RAMP[RAMP.length-1][1])}
+
+const hasThree=typeof THREE!=='undefined';
+let canGL=hasThree;
+if(canGL){try{const t=document.createElement('canvas');canGL=!!(t.getContext('webgl')||t.getContext('experimental-webgl'))}catch(e){canGL=false}}
+
+function buildWorld(ds){
+  const g=new THREE.Group(), N=ds.months.length, rails=ds.rails;
+  // sheet between rails
+  const SUB=6, rows=[];
+  for(let r=0;r<rails.length;r++){
+    if(r===rails.length-1){rows.push({a:r,b:r,t:0});break}
+    for(let s=0;s<SUB;s++) rows.push({a:r,b:r+1,t:s/SUB});
+  }
+  const R=rows.length, pos=new Float32Array(N*R*3), col=new Float32Array(N*R*3), ok=new Uint8Array(N*R);
+  for(let i=0;i<N;i++)for(let j=0;j<R;j++){
+    const {a,b,t}=rows[j], va=rails[a].vals[i], vb=rails[b].vals[i];
+    const za=Math.log10(rails[a].mat), zb=Math.log10(rails[b].mat);
+    const v=lerp(va,vb,t), z=Z(Math.pow(10,lerp(za,zb,t))), k=(i*R+j);
+    const good=isFinite(v)&&!(ds.snapshotIndex===i&&ds.mode==='public');
+    ok[k]=good?1:0;
+    pos[k*3]=X(i,N);pos[k*3+1]=good?Y(v):0;pos[k*3+2]=z;
+    const c=rampColor(good?v:VMIN);col[k*3]=c.r;col[k*3+1]=c.g;col[k*3+2]=c.b;
+  }
+  const idx=[];
+  for(let i=0;i<N-1;i++)for(let j=0;j<R-1;j++){
+    const p=i*R+j,q=(i+1)*R+j;
+    if(ok[p]&&ok[p+1]&&ok[q]&&ok[q+1]){idx.push(p,q,p+1,p+1,q,q+1)}
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  geo.setIndex(idx);geo.computeVertexNormals();
+  const sheet=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.55,metalness:.1,transparent:true,opacity:.82,depthWrite:false}));
+  sheet.renderOrder=1;g.add(sheet);
+  // yearly ribs on the sheet
+  const rib=[];
+  for(let i=0;i<N;i++){ if(ds.months[i].slice(5)!=='01') continue;
+    for(let j=0;j<R-1;j++){const p=i*R+j;if(ok[p]&&ok[p+1]){rib.push(pos[p*3],pos[p*3+1]+.004,pos[p*3+2],pos[(p+1)*3],pos[(p+1)*3+1]+.004,pos[(p+1)*3+2])}}
+  }
+  const ribG=new THREE.BufferGeometry();ribG.setAttribute('position',new THREE.Float32BufferAttribute(rib,3));
+  g.add(new THREE.LineSegments(ribG,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.18})));
+  // rails as tubes, split on gaps
+  rails.forEach(rl=>{
+    let seg=[];
+    const flush=()=>{ if(seg.length>1){
+        const curve=new THREE.CatmullRomCurve3(seg,false,'catmullrom',.1);
+        const tube=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.max(8,seg.length*3),.032,6,false),new THREE.MeshBasicMaterial({color:new THREE.Color(rl.color)}));
+        tube.renderOrder=2;g.add(tube);}
+      seg=[];};
+    for(let i=0;i<N;i++){const v=rl.vals[i];
+      if(isFinite(v)&&!(ds.mode==='public'&&i===ds.snapshotIndex)) seg.push(new THREE.Vector3(X(i,N),Y(v),Z(rl.mat))); else flush();}
+    flush();
+  });
+  // floor grid
+  const fl=[], y0=0;
+  for(let i=0;i<N;i++){ if(ds.months[i].slice(5)!=='01'&&i!==N-1&&i!==0) continue; fl.push(X(i,N),y0,ZF+.3,X(i,N),y0,ZB-.3)}
+  rails.forEach(rl=>{fl.push(X(0,N),y0,Z(rl.mat),X(N-1,N),y0,Z(rl.mat))});
+  const flG=new THREE.BufferGeometry();flG.setAttribute('position',new THREE.Float32BufferAttribute(fl,3));
+  g.add(new THREE.LineSegments(flG,new THREE.LineBasicMaterial({color:new THREE.Color(COL.line)})));
+  // back wall yield lines at 4,6,8%
+  const wl=[];[4,6,8].forEach(v=>{wl.push(X(0,N),Y(v),ZB-.3,X(N-1,N),Y(v),ZB-.3)});
+  [4,6,8].forEach(v=>{wl.push(X(0,N),Y(v),ZB-.3,X(0,N),Y(v),ZF+.3)});
+  const wG=new THREE.BufferGeometry();wG.setAttribute('position',new THREE.Float32BufferAttribute(wl,3));
+  g.add(new THREE.LineSegments(wG,new THREE.LineBasicMaterial({color:0x2a3644,transparent:true,opacity:.8})));
+  // cursor plane + slice
+  const cur=new THREE.Mesh(new THREE.PlaneGeometry(ZF-ZB+.6,Y(VMAX)+.4),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.05,side:THREE.DoubleSide,depthWrite:false}));
+  cur.rotation.y=Math.PI/2;cur.position.y=(Y(VMAX)+.4)/2;cur.renderOrder=3;g.add(cur);
+  const slice=new THREE.Group();g.add(slice);
+  return {group:g,sheet,cursor:cur,slice,N};
+}
+
+function sliceMarkers(world,ds,i){
+  const s=world.slice;
+  while(s.children.length){const c=s.children.pop();c.geometry&&c.geometry.dispose()}
+  const N=ds.months.length, x=X(i,N);
+  world.cursor.position.x=x;
+  let pts;
+  if(ds.mode==='public'&&i===ds.snapshotIndex){
+    pts=[[1/365,ds.rails[0].vals[i],COL.repo]].concat(TODAY.pts.map(p=>[p[1],p[2],p[0]==='3M'?COL.m3:p[0]==='10Y'?COL.y10:COL.fg]));
+  } else pts=ds.rails.map(r=>[r.mat,r.vals[i],r.color]);
+  pts=pts.filter(p=>isFinite(p[1]));
+  if(pts.length>1){
+    const v=pts.map(p=>new THREE.Vector3(x,Y(p[1]),Z(p[0])));
+    const curve=new THREE.CatmullRomCurve3(v,false,'catmullrom',.2);
+    const tube=new THREE.Mesh(new THREE.TubeGeometry(curve,64,.045,8,false),new THREE.MeshBasicMaterial({color:0xffffff}));
+    tube.renderOrder=4;s.add(tube);
+  }
+  const sg=new THREE.SphereGeometry(.09,16,12);
+  pts.forEach(p=>{const m=new THREE.Mesh(sg,new THREE.MeshBasicMaterial({color:new THREE.Color(p[2])}));m.position.set(x,Y(p[1]),Z(p[0]));m.renderOrder=5;s.add(m)});
+}
+
+function makeScene(canvas,labelBox){
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  const scene=new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xdfe8ff,0x0a0e13,1.0));
+  const d=new THREE.DirectionalLight(0xffffff,.9);d.position.set(4,8,6);scene.add(d);
+  const cam=new THREE.PerspectiveCamera(34,1,.1,200);
+  const S={renderer,scene,cam,canvas,labelBox,world:null,labels:[],sel:-1};
+  S.size=()=>{const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()};
+  S.size();
+  return S;
+}
+function setWorld(S,ds){
+  if(S.world){S.scene.remove(S.world.group);S.world.group.traverse(o=>{o.geometry&&o.geometry.dispose()})}
+  S.world=buildWorld(ds);S.scene.add(S.world.group);S.sel=-1;
+  // labels
+  S.labelBox.innerHTML='';S.labels=[];
+  const N=ds.months.length;
+  const add=(text,v,cls,color)=>{const el=document.createElement('span');el.textContent=text;if(cls)el.className=cls;if(color)el.style.color=color;S.labelBox.appendChild(el);S.labels.push({el,v})};
+  const first=+ds.months[0].slice(0,4), last=+ds.months[N-1].slice(0,4), step=last-first>8?2:1;
+  ds.months.forEach((m,i)=>{const y=+m.slice(0,4);if(m.slice(5)==='01'&&(y-first)%step===0) add(String(y),new THREE.Vector3(X(i,N),0,ZF+.75))});
+  ds.rails.forEach(r=>add(r.label,new THREE.Vector3(X(N-1,N)+.45,0,Z(r.mat)),'rail',r.color));
+  [4,6,8].forEach(v=>add(v+'%',new THREE.Vector3(X(0,N)-.25,Y(v),ZB-.3),'left'));
+}
+function placeLabels(S){
+  const w=S.canvas.clientWidth,h=S.canvas.clientHeight,v=new THREE.Vector3();
+  S.labels.forEach(L=>{v.copy(L.v).project(S.cam);const vis=v.z<1&&Math.abs(v.x)<1.1&&Math.abs(v.y)<1.1;
+    L.el.style.opacity=vis?1:0;L.el.style.transform=`translate(${(v.x*.5+.5)*w}px,${(-v.y*.5+.5)*h}px) translate(${L.el.classList.contains('left')?'-100%':'-50%'},-50%)`});
+}
+function orbit(cam,target,az,el,r){cam.position.set(target.x+r*Math.cos(el)*Math.sin(az),target.y+r*Math.sin(el),target.z+r*Math.cos(el)*Math.cos(az));cam.lookAt(target)}
+
+/* ================= READOUTS ================= */
+const f2=v=>isFinite(v)?v.toFixed(2)+'%':'–';
+const sp=v=>isFinite(v)?(v>=0?'+':'−')+Math.abs(v).toFixed(2):'–';
+function valuesAt(ds,i){
+  const get=k=>{const r=ds.rails.find(r=>r.key===k);return r?r.vals[i]:NaN};
+  let repo=get('repo'),m3=get('m3'),y10=get('y10');
+  if(ds.mode==='csv'){const short=ds.rails.find(r=>r.key==='m3')||ds.rails[0],long=ds.rails.find(r=>Math.abs(r.mat-10)<.01)||ds.rails[ds.rails.length-1];m3=short.vals[i];y10=long.vals[i]}
+  return {repo,m3,y10,spr:y10-m3};
+}
+const hud={when:hWhen,repo:hRepo,m3:hM3,y10:hY10,spr:hSpr,note:hNote};
+function fillHUD(i){
+  const v=valuesAt(DS,i),m=DS.months[i];
+  hud.when.textContent=(DS.mode==='public'&&i===DS.snapshotIndex)?TODAY.label:ymLabel(m);
+  hud.repo.textContent=f2(v.repo);hud.m3.textContent=f2(v.m3);hud.y10.textContent=f2(v.y10);hud.spr.textContent=sp(v.spr);
+  hud.note.textContent=(DS.mode==='public'&&i===DS.snapshotIndex)?'Daily close':(isFinite(v.y10)?'Monthly average':'No data this month');
+}
+
+/* ================= SCENES ================= */
+let A=null,B=null;
+if(canGL){try{A=makeScene(c1,lab1);B=makeScene(c2,lab2);setWorld(A,DS);setWorld(B,DS)}catch(e){A=B=null}}
+if(!A){[stage,vp].forEach(el=>{const d=document.createElement('div');d.className='nogl';d.textContent='The 3D view needs WebGL, which this browser has turned off. The explorer readout, spread chart and today\'s curve below still work.';el.appendChild(d)})}
+
+/* ---- story ---- */
+const steps=[...document.querySelectorAll('.step')];
+const VIEWS={ // azimuth, elevation, radius, target x as month fraction (null=centre), target y
+  intro:[-.5,.4,20,.32,1.5], front:[-.95,.3,11,.04,2.7], glide:[-.35,.5,15,.3,2.2], floor:[.15,.38,12.5,.53,1.6],
+  hikes:[-.75,.28,12,.66,2.4], steep:[.5,.36,12.5,.85,2.2], today:[1.15,.22,12,.95,2.3]
+};
+const stepData=steps.map(s=>({m:s.dataset.m,v:VIEWS[s.dataset.v]}));
+function storyState(){
+  const vh=innerHeight, c=vh*.55; // focus line
+  let k=0,t=0;
+  for(let i=0;i<steps.length;i++){const r=steps[i].getBoundingClientRect();const mid=r.top+r.height/2;if(mid<=c)k=i}
+  const r0=steps[k].getBoundingClientRect(), next=steps[k+1];
+  if(next){const a=r0.top+r0.height/2,b=next.getBoundingClientRect().top+next.getBoundingClientRect().height/2;t=clamp((c-a)/(b-a))}
+  return {k,t};
+}
+const cam1={az:-.55,el:.42,r:19,tx:0,ty:1.9};
+let storyMonth=0;
+function storyFrame(){
+  if(!A) {const {k,t}=storyState();const i=Math.round(lerp(idxOf(stepData[k].m),idxOf((stepData[k+1]||stepData[k]).m),ease(t)));if(i!==storyMonth){storyMonth=i;fillHUD(i)}return}
+  const {k,t}=storyState(), a=stepData[k], b=stepData[k+1]||a, e=ease(t);
+  const N=DS.months.length;
+  const tgt=v=>v[3]==null?0:X(Math.round(v[3]*(N-1)),N);
+  const goal={az:lerp(a.v[0],b.v[0],e),el:lerp(a.v[1],b.v[1],e),r:lerp(a.v[2],b.v[2],e),tx:lerp(tgt(a.v),tgt(b.v),e),ty:lerp(a.v[4],b.v[4],e)};
+  const s=reduce?1:.08;
+  for(const key in goal) cam1[key]=lerp(cam1[key],goal[key],s);
+  const portrait=A.cam.aspect<.9;
+  orbit(A.cam,new THREE.Vector3(cam1.tx,cam1.ty,0),cam1.az,cam1.el,cam1.r*(portrait?1.55:1));
+  const i=clamp(Math.round(lerp(idxOf(a.m),idxOf(b.m),e)),0,N-1);
+  if(i!==A.sel){A.sel=i;sliceMarkers(A.world,DS,i);fillHUD(i)}
+  A.renderer.render(A.scene,A.cam);placeLabels(A);
+}
+const idxOf=m=>{const i=DS.months.indexOf(m);return i<0?(m<DS.months[0]?0:DS.months.length-1):i};
+
+/* ---- explorer ---- */
+const cam2={az:-.6,el:.42,r:17,ta:-.6,te:.42,tr:17};
+let drag=false,lx=0,ly=0,moved=0;
+vp.addEventListener('pointerdown',e=>{drag=true;moved=0;lx=e.clientX;ly=e.clientY;vp.setPointerCapture(e.pointerId)});
+vp.addEventListener('pointermove',e=>{
+  if(drag){const dx=e.clientX-lx,dy=e.clientY-ly;moved+=Math.abs(dx)+Math.abs(dy);cam2.ta-=dx*.008;cam2.te=clamp(cam2.te+dy*.006,.05,1.35);lx=e.clientX;ly=e.clientY;tip.hidden=true;return}
+  hover(e);
+});
+const endDrag=()=>{drag=false};
+vp.addEventListener('pointerup',e=>{endDrag();if(moved<4)pick(e)});vp.addEventListener('pointercancel',endDrag);
+vp.addEventListener('pointerleave',()=>{tip.hidden=true});
+zin.onclick=()=>{cam2.tr=clamp(cam2.tr*.85,7,30)};zout.onclick=()=>{cam2.tr=clamp(cam2.tr/.85,7,30)};
+zreset.onclick=()=>{cam2.ta=-.6;cam2.te=.42;cam2.tr=17};
+const ray=hasThree?new THREE.Raycaster():null, ndc=hasThree?new THREE.Vector2():null;
+function hitMonth(e){
+  if(!B) return -1;const r=c2.getBoundingClientRect();ndc.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
+  ray.setFromCamera(ndc,B.cam);const h=ray.intersectObject(B.world.sheet);if(!h.length) return -1;
+  const N=DS.months.length;return clamp(Math.round((h[0].point.x/W+.5)*(N-1)),0,N-1);
+}
+function hover(e){const i=hitMonth(e);if(i<0){tip.hidden=true;return}
+  const v=valuesAt(DS,i),r=vp.getBoundingClientRect();tip.hidden=false;
+  tip.textContent=`${ymLabel(DS.months[i])}  ·  3M ${f2(v.m3)}  ·  10Y ${f2(v.y10)}`;
+  tip.style.left=(e.clientX-r.left)+'px';tip.style.top=(e.clientY-r.top)+'px';
+  const flip=e.clientX-r.left>r.width*.6;tip.style.transform=flip?'translate(calc(-100% - 12px),-120%)':'translate(12px,-120%)';
+}
+function pick(e){const i=hitMonth(e);if(i>=0)selectMonth(i)}
+let sel=153, playing=false, playT=0;
+function selectMonth(i){sel=clamp(i,0,DS.months.length-1);slider.value=sel;fillSide();if(B){sliceMarkers(B.world,DS,sel);B.sel=sel}drawSpark()}
+slider.addEventListener('input',()=>{stopPlay();selectMonth(+slider.value)});
+play.onclick=()=>{if(playing)stopPlay();else{playing=true;play.textContent='Pause';if(sel>=DS.months.length-1)selectMonth(0);playT=performance.now()}};
+function stopPlay(){playing=false;play.textContent='Play'}
+function fillSide(){const v=valuesAt(DS,sel);
+  sWhen.textContent=(DS.mode==='public'&&sel===DS.snapshotIndex)?TODAY.label:ymLabel(DS.months[sel]);
+  sRepo.textContent=f2(v.repo);sM3.textContent=f2(v.m3);sY10.textContent=f2(v.y10);sSpr.textContent=sp(v.spr);
+}
+function explorerFrame(t){
+  if(playing&&t-playT>(reduce?400:110)){playT=t;if(sel>=DS.months.length-1)stopPlay();else selectMonth(sel+1)}
+  if(!B) return;
+  const s=reduce?1:.12;cam2.az=lerp(cam2.az,cam2.ta,s);cam2.el=lerp(cam2.el,cam2.te,s);cam2.r=lerp(cam2.r,cam2.tr,s);
+  const portrait=B.cam.aspect<1.1;
+  orbit(B.cam,new THREE.Vector3(0,1.9,0),cam2.az,cam2.el,cam2.r*(portrait?1.5:1));
+  B.renderer.render(B.scene,B.cam);placeLabels(B);
+}
+
+/* ---- spread sparkline ---- */
+const NS='http://www.w3.org/2000/svg';
+function svgEl(n,a,p){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+function drawSpark(){
+  const svg=spark;svg.innerHTML='';const N=DS.months.length;
+  const vals=DS.months.map((_,i)=>valuesAt(DS,i).spr);
+  const fin=vals.filter(isFinite);if(!fin.length) return;
+  const lo=Math.min(-1,Math.floor(Math.min(...fin))),hi=Math.max(1,Math.ceil(Math.max(...fin)));
+  const L=26,R=296,T=8,Bt=104,x=i=>L+(R-L)*i/(N-1),y=v=>T+(Bt-T)*(hi-v)/(hi-lo);
+  for(let v=lo;v<=hi;v++){svgEl('line',{x1:L,x2:R,y1:y(v),y2:y(v),stroke:v===0?COL.dim:COL.line,'stroke-width':1},svg);svgEl('text',{x:L-6,y:y(v)+3.5,'text-anchor':'end','font-size':9.5,fill:COL.muted,'font-family':'IBM Plex Mono, monospace'},svg).textContent=(v>0?'+':'')+v}
+  let d='',up=true;vals.forEach((v,i)=>{if(!isFinite(v)){up=true;return}d+=(up?'M':'L')+x(i).toFixed(1)+' '+y(v).toFixed(1);up=false});
+  let area='';{let started=false,lastX=0;vals.forEach((v,i)=>{if(!isFinite(v))return;area+=(started?'L':'M'+x(i).toFixed(1)+' '+y(0).toFixed(1)+'L')+x(i).toFixed(1)+' '+y(v).toFixed(1);started=true;lastX=x(i)});area+='L'+lastX.toFixed(1)+' '+y(0).toFixed(1)+'Z'}
+  svgEl('path',{d:area,fill:COL.y10,'fill-opacity':.12},svg);
+  svgEl('path',{d,fill:'none',stroke:COL.y10,'stroke-width':1.6,'stroke-linejoin':'round'},svg);
+  const first=+DS.months[0].slice(0,4),last=+DS.months[N-1].slice(0,4);
+  [first,Math.round((first+last)/2),last].forEach(yr=>{const i=DS.months.indexOf(yr+'-01');if(i>=0)svgEl('text',{x:x(i),y:118,'text-anchor':'middle','font-size':9.5,fill:COL.muted,'font-family':'IBM Plex Mono, monospace'},svg).textContent=yr});
+  svgEl('line',{x1:x(sel),x2:x(sel),y1:T,y2:Bt,stroke:COL.fg,'stroke-width':1,'stroke-dasharray':'2 3'},svg);
+  if(isFinite(vals[sel]))svgEl('circle',{cx:x(sel),cy:y(vals[sel]),r:3.5,fill:COL.fg},svg);
+  const hit=svgEl('rect',{x:L,y:0,width:R-L,height:120,fill:'transparent',style:'cursor:pointer'},svg);
+  hit.addEventListener('click',e=>{const r=svg.getBoundingClientRect();const px=(e.clientX-r.left)/r.width*300;stopPlay();selectMonth(Math.round((px-L)/(R-L)*(N-1)))});
+}
+
+/* ---- today's curve chart ---- */
+function drawCurve(){
+  const svg=curve, P=TODAY.pts, L=56,R=620,T=24,Bt=290;
+  const lx=m=>L+(R-L)*(Math.log10(m)-Math.log10(.25))/(Math.log10(30)-Math.log10(.25));
+  const lo=5,hi=8,y=v=>T+(Bt-T)*(hi-v)/(hi-lo);
+  for(let v=lo;v<=hi;v+=.5){svgEl('line',{x1:L,x2:R,y1:y(v),y2:y(v),stroke:COL.line,'stroke-width':1},svg);svgEl('text',{x:L-10,y:y(v)+4,'text-anchor':'end','font-size':12,fill:COL.muted,'font-family':'IBM Plex Mono, monospace'},svg).textContent=v.toFixed(1)+'%'}
+  svgEl('line',{x1:L,x2:R,y1:y(TODAY.repo),y2:y(TODAY.repo),stroke:COL.repo,'stroke-width':1.5,'stroke-dasharray':'5 5'},svg);
+  svgEl('text',{x:R,y:y(TODAY.repo)+18,'text-anchor':'end','font-size':12,fill:COL.repo,'font-family':'IBM Plex Mono, monospace'},svg).textContent='Repo 5.50%';
+  const d=P.map((p,i)=>(i?'L':'M')+lx(p[1]).toFixed(1)+' '+y(p[2]).toFixed(1)).join('');
+  const area=d+`L${lx(30)} ${Bt}L${lx(.25)} ${Bt}Z`;
+  svgEl('path',{d:area,fill:COL.hot,'fill-opacity':.08},svg);
+  svgEl('path',{d,fill:'none',stroke:COL.hot,'stroke-width':2.5,'stroke-linejoin':'round'},svg);
+  P.forEach((p,i)=>{
+    svgEl('circle',{cx:lx(p[1]),cy:y(p[2]),r:4.5,fill:COL.hot,stroke:'#0a0e13','stroke-width':2},svg);
+    svgEl('text',{x:lx(p[1]),y:Bt+22,'text-anchor':'middle','font-size':12,fill:COL.muted,'font-family':'IBM Plex Mono, monospace'},svg).textContent=p[0];
+    const above=i!==1;
+    svgEl('text',{x:lx(p[1])+(i===0?6:0),y:y(p[2])+(above?-12:20),'text-anchor':i===0?'start':(i===P.length-1?'end':'middle'),'font-size':11.5,fill:COL.fg,'font-family':'IBM Plex Mono, monospace'},svg).textContent=p[2].toFixed(2);
+  });
+  svgEl('text',{x:(L+R)/2,y:334,'text-anchor':'middle','font-size':11,fill:COL.dim,'font-family':'IBM Plex Mono, monospace'},svg).textContent='Maturity (log scale)';
+  tbody.innerHTML=P.map(p=>`<tr><td>${p[0]==='1Y'?'1 year (52-week)':p[0].replace('M',' months').replace('Y',' years').replace(/^1 years$/,'1 year')}</td><td class="r">${p[2].toFixed(2)}%</td><td class="r">${(p[2]-TODAY.repo>=0?'+':'−')+Math.abs(p[2]-TODAY.repo).toFixed(2)}</td></tr>`).join('');
+}
+
+/* ---- CSV ---- */
+function parseTenor(h){const m=String(h).trim().toUpperCase().match(/^(\d+(?:\.\d+)?)\s*([DWMY])/);if(!m)return null;const n=+m[1];return {D:n/365,W:n*7/365,M:n/12,Y:n}[m[2]]}
+function parseCSV(text){
+  const lines=text.replace(/\r/g,'').split('\n').filter(l=>l.trim());
+  if(lines.length<3) throw new Error('The file needs a header row and at least two rows of data.');
+  const sep=lines[0].includes(';')&&!lines[0].includes(',')?';':(lines[0].includes('\t')?'\t':',');
+  const head=lines[0].split(sep).map(s=>s.trim().replace(/^"|"$/g,''));
+  const cols=head.slice(1).map((h,k)=>({h,k:k+1,mat:parseTenor(h)})).filter(c=>c.mat);
+  if(cols.length<2) throw new Error('No maturity columns found. Name them like 3M, 6M, 1Y, 10Y.');
+  const acc=new Map();
+  for(const line of lines.slice(1)){
+    const c=line.split(sep).map(s=>s.trim().replace(/^"|"$/g,''));
+    let d=c[0], m=d.match(/^(\d{4})[-/](\d{1,2})/);
+    if(!m){const m2=d.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);if(m2)m=[0,m2[3],m2[2]]}
+    if(!m) continue;
+    const key=m[1]+'-'+String(+m[2]).padStart(2,'0');
+    if(!acc.has(key)) acc.set(key,cols.map(()=>[0,0]));
+    const a=acc.get(key);cols.forEach((col,j)=>{const v=parseFloat(c[col.k]);if(isFinite(v)){a[j][0]+=v;a[j][1]++}});
+  }
+  const keys=[...acc.keys()].sort();
+  if(keys.length<2) throw new Error('Could not read dates. Use YYYY-MM-DD or YYYY-MM in the first column.');
+  const [y0,m0]=keys[0].split('-').map(Number),[y1,m1]=keys[keys.length-1].split('-').map(Number);
+  const months=[];for(let y=y0,m=m0;y<y1||(y===y1&&m<=m1);m++){if(m>12){m=1;y++;if(y>y1||(y===y1&&m>m1))break}months.push(y+'-'+String(m).padStart(2,'0'))}
+  const palette=['#5ed0c3','#7fc8e8','#9fb7ff','#b9a2ff','#d79cf0','#ef9ac0','#f3b562','#ef8a62'];
+  const order=cols.map((c,j)=>({...c,j})).sort((a,b)=>a.mat-b.mat);
+  const rails=order.map((col,n)=>({
+    key:Math.abs(col.mat-.25)<.01?'m3':Math.abs(col.mat-10)<.01?'y10':col.h,
+    label:col.h.toUpperCase(),mat:col.mat,
+    color:palette[Math.round(n*(palette.length-1)/Math.max(1,order.length-1))],
+    vals:months.map(m=>{const a=acc.get(m);if(!a)return NaN;const s=a[col.j];return s[1]?s[0]/s[1]:NaN})
+  }));
+  return {mode:'csv',months,snapshotIndex:-1,rails};
+}
+function loadText(text,name){
+  try{
+    const ds=parseCSV(text);
+    DS=ds;rebuild();
+    status.className='status ok';status.textContent=`Loaded ${name}: ${ds.rails.length} maturities, ${ds.months.length} months (${ymLabel(ds.months[0])} to ${ymLabel(ds.months[ds.months.length-1])}). Scroll up to see it.`;
+    resetData.hidden=false;
+  }catch(err){status.className='status err';status.textContent=err.message}
+}
+function rebuild(){
+  if(A){setWorld(A,DS);A.sel=-1}
+  if(B){setWorld(B,DS)}
+  const N=DS.months.length;slider.max=N-1;selectMonth(N-1);
+  stepsVisible(DS.mode==='public');
+}
+function stepsVisible(on){steps.forEach((s,i)=>{const c=s.querySelector('.card');if(c)c.style.opacity=on?1:.35})}
+if(file){file.addEventListener('change',()=>{const f=file.files[0];if(!f)return;const r=new FileReader();r.onload=()=>loadText(String(r.result),f.name);r.readAsText(f)});
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>loadText(String(r.result),f.name);r.readAsText(f)});
+resetData.onclick=()=>{DS=publicDataset();rebuild();status.className='status';status.textContent='Back to the public data.';resetData.hidden=true};}
+
+/* ---- loop ---- */
+const vis=new Map();
+const io=new IntersectionObserver(es=>es.forEach(e=>vis.set(e.target,e.isIntersecting)),{rootMargin:'100px'});
+[stage,vp].forEach(el=>{vis.set(el,true);io.observe(el)});
+function resize(){A&&A.size();B&&B.size()}
+addEventListener('resize',resize);
+if(window.ResizeObserver) new ResizeObserver(resize).observe(vp);
+drawCurve();selectMonth(153);fillHUD(0);
+function loop(t){
+  if(vis.get(stage)) storyFrame();
+  if(vis.get(vp)||playing) explorerFrame(t);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
